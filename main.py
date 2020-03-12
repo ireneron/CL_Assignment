@@ -282,9 +282,6 @@ class LM(object):
         """
         
         total_probability = 0
-        lamdbaOne = 0
-        lamdbaTwo = 0
-
         
         # BIGRAM - ONLY WORKING ONE FOR NOW
         try:
@@ -319,22 +316,6 @@ class LM(object):
         
         return total_probability
         
-
-        """
-        try:
-            ngram_tot = np.sum(list(self.counts[history].values())) + (self.vocab_size*self.lam) # sum in all the
-            try:
-                transition_count = self.counts[history][target] + self.lam # if history not in vocab, smooth
-            except KeyError:
-                transition_count = self.lam
-        except KeyError: #
-            transition_count = self.lam
-            ngram_tot = self.vocab_size*self.lam
-            
-        return transition_count/ngram_tot
-    
-        """
-        
     
     def perplexity(self, test_corpus):
         
@@ -346,7 +327,15 @@ class LM(object):
         """
         
         probs = []
-        for sentence in test_corpus.sentences:
+        total = len(test_corpus.sentences[:1000])
+        counter = 0
+        
+        for sentence in test_corpus.sentences[:1000]:
+            counter += 1
+            if counter % 100 == 0:
+                print("% done: ", counter/total * 100)
+                print()
+            
             for idx in range(self.ngram_size-1, len(sentence)):
                 ngram = self.get_ngram(sentence, idx)
                 if self.ngram_size == 1:
