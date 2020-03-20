@@ -157,6 +157,19 @@ class Corpus(object):
 # LANGUAGE MODEL
 #------------------------------------------------------------------------------
 
+def cache(func):
+    print("I'm checking cache!")
+    cache = {}
+
+    def check_cache(*args):
+        if args in cache:
+            return cache[args]
+        result = func(*args)
+        cache[args] = result
+        return result
+
+    return check_cache
+
 
 class LM(object):
     
@@ -174,6 +187,7 @@ class LM(object):
         self.lam = lam
         self.ngram_size = n
         self.probability = 0 # SELF ADDED
+        self.unigram_probs = {}
         
     def get_ngram(self, sentence, i):
         
@@ -248,7 +262,37 @@ class LM(object):
         # first loop through the sentences in the corpus, than loop through each word in a sentence
         self.vocab = {word for sentence in corpus.sentences for word in sentence}
         self.vocab_size = len(self.vocab)
-    
+        
+        if self.ngram_size == 1:
+            tot = sum(list(self.counts.values())) + (self.vocab_size*self.lam)
+            for word in self.counts:
+                if self.counts[word] != 0:
+                    ngram_count = self.counts[word] + self.lam
+                else:
+                    ngram_count = self.lam
+                
+                prob = ngram_count/tot
+                self.unigram_probs[word] = prob
+        """       
+        if self.ngram_size == 2:
+            
+            new_dict = {}
+            for i in self.counts.items():
+                new_dict[i[0][0]] = np.sum(list(i[1].values()))
+                
+            tot = np.sum(list(new_dict.values())) + (self.vocab_size*self.lam) # sum in all the
+            
+            
+            for word in new_dict:
+                if new_dict[word] != 0:
+                    ngram_count = new_dict[word] + self.lam
+                else:
+                    ngram_count = self.lam
+                
+                prob = ngram_count/tot
+                self.unigram_probs[word] = prob
+        """
+    @cache
     def get_unigram_probability(self, ngram):
         
         """
@@ -258,7 +302,7 @@ class LM(object):
         Laplace smoothing (add k).¨
         
         for interpolation can add lambda here
-        """
+        
 
         tot = sum(list(self.counts.values())) + (self.vocab_size*self.lam) # length of corpus
         #print("Total is: ", tot)  # 941078.562
@@ -268,9 +312,11 @@ class LM(object):
         except KeyError: # If there isn't an entry for the n_gram in the corpus...
             ngram_count = self.lam
             #print(ngram_count)
+        """
         
-        return ngram_count/tot
+        return self.unigram_probs[ngram]
     
+    @cache
     def get_ngram_probability(self, history, target):
         
         """
@@ -297,7 +343,8 @@ class LM(object):
         bigram_probability = bigram_transition_count/bigram_tot
         
         
-        # UNIGRAM        
+        # UNIGRAM    
+        """
         new_dict = {}
         for i in self.counts.items():
             new_dict[i[0][0]] = np.sum(list(i[1].values()))
@@ -309,7 +356,15 @@ class LM(object):
                 unigram_transition_count = self.lam            
         
         unigram_probability = unigram_transition_count/unigram_tot
+        """
         
+        unigram_tot = np.sum(list(self.counts[target].values())) + (self.vocab_size*self.lam) # sum in all the
+        try:
+            unigram_transition_count = np.sum(list(self.counts[target].values())) + self.lam # if history not in vocab, smooth
+        except KeyError:
+                unigram_transition_count = self.lam            
+        
+        unigram_probability = unigram_transition_count/unigram_tot
         
         
         total_probability = unigram_probability*0.5 + bigram_probability*0.5 #+ trigram_probability*0.2
@@ -331,6 +386,7 @@ class LM(object):
         counter = 0
         
         for sentence in test_corpus.sentences[:1000]:
+            
             counter += 1
             if counter % 100 == 0:
                 print("% done: ", counter/total * 100)
@@ -345,7 +401,7 @@ class LM(object):
         
         entropy = np.log2(probs)
         # this assertion makes sure that you retrieved valid probabilities, whose log must be <= 0
-        assert all(entropy <= 0)
+        #assert all(entropy <= 0)
         
         avg_entropy = -1 * (sum(entropy) / len(entropy))
         
@@ -370,7 +426,7 @@ test_corpus = Corpus(test_path, None, n, bos_eos=True, vocab=unigram_model.vocab
 # None refers to frequency threshold
 # We pass trained vocabulary because the two have to be consistent 
 # (if word not in training set, then to match unknown word)
-unigram_model.perplexity(test_corpus)
+print(unigram_model.perplexity(test_corpus))
 
 #------------------------------------------------------------------------------
 # BIGRAM MODEL
@@ -388,4 +444,4 @@ print("LM update counts is DONE!")
 # to ensure consistency, the test corpus is filtered using the vocabulary of the trained language model
 test_corpus = Corpus(test_path, None, n, bos_eos=True, vocab=bigram_model.vocab)
 print("Testing...")
-bigram_model.perplexity(test_corpus)
+print(bigram_model.perplexity(test_corpus))
