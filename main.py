@@ -188,6 +188,7 @@ class LM(object):
         self.ngram_size = n
         self.probability = 0 # SELF ADDED
         self.unigram_probs = {}
+        self.new_dict = {}
         
     def get_ngram(self, sentence, i):
         
@@ -263,6 +264,8 @@ class LM(object):
         self.vocab = {word for sentence in corpus.sentences for word in sentence}
         self.vocab_size = len(self.vocab)
         
+        
+          
         if self.ngram_size == 1:
             tot = sum(list(self.counts.values())) + (self.vocab_size*self.lam)
             for word in self.counts:
@@ -273,26 +276,35 @@ class LM(object):
                 
                 prob = ngram_count/tot
                 self.unigram_probs[word] = prob
-        """       
+        
+        
         if self.ngram_size == 2:
             
-            new_dict = {}
+            self.new_dict = {}
             for i in self.counts.items():
-                new_dict[i[0][0]] = np.sum(list(i[1].values()))
+                self.new_dict[i[0][0]] = np.sum(list(i[1].values()))
                 
-            tot = np.sum(list(new_dict.values())) + (self.vocab_size*self.lam) # sum in all the
+            self.compute_unigram_for_bigram()
+            
+      
+    def compute_unigram_for_bigram(self):
+        
+        try:
+            tot = np.sum(list(self.new_dict.values())) + (self.vocab_size*self.lam) # sum in all the
             
             
-            for word in new_dict:
-                if new_dict[word] != 0:
-                    ngram_count = new_dict[word] + self.lam
-                else:
+            for word in self.new_dict:
+                try:
+                    ngram_count = self.new_dict[word] + self.lam
+                except KeyError:
                     ngram_count = self.lam
                 
                 prob = ngram_count/tot
                 self.unigram_probs[word] = prob
-        """
-    @cache
+        except KeyError:       
+            self.unigram_probs[word] = self.lam / self.vocab_size*self.lam  
+    
+    
     def get_unigram_probability(self, ngram):
         
         """
@@ -303,20 +315,10 @@ class LM(object):
         
         for interpolation can add lambda here
         
-
-        tot = sum(list(self.counts.values())) + (self.vocab_size*self.lam) # length of corpus
-        #print("Total is: ", tot)  # 941078.562
-        try:
-            ngram_count = self.counts[ngram] + self.lam # add K smoothing
-            #print(ngram_count)
-        except KeyError: # If there isn't an entry for the n_gram in the corpus...
-            ngram_count = self.lam
-            #print(ngram_count)
         """
         
         return self.unigram_probs[ngram]
     
-    @cache
     def get_ngram_probability(self, history, target):
         
         """
@@ -344,30 +346,14 @@ class LM(object):
         
         
         # UNIGRAM    
-        """
-        new_dict = {}
-        for i in self.counts.items():
-            new_dict[i[0][0]] = np.sum(list(i[1].values()))
         
-        unigram_tot = np.sum(list(new_dict.values())) + (self.vocab_size*self.lam) # sum in all the
-        try:
-            unigram_transition_count = new_dict[target] + self.lam # if history not in vocab, smooth
-        except KeyError:
-                unigram_transition_count = self.lam            
+        #kept getting weird errors with this but this fixes it....
+        if target == '#eos#':
+            unigram_probability = self.lam / self.vocab_size*self.lam  
+        else:
+            unigram_probability = self.unigram_probs[target]
         
-        unigram_probability = unigram_transition_count/unigram_tot
-        """
-        
-        unigram_tot = np.sum(list(self.counts[target].values())) + (self.vocab_size*self.lam) # sum in all the
-        try:
-            unigram_transition_count = np.sum(list(self.counts[target].values())) + self.lam # if history not in vocab, smooth
-        except KeyError:
-                unigram_transition_count = self.lam            
-        
-        unigram_probability = unigram_transition_count/unigram_tot
-        
-        
-        total_probability = unigram_probability*0.5 + bigram_probability*0.5 #+ trigram_probability*0.2
+        total_probability = unigram_probability*0.17 + bigram_probability*0.83 
         
         return total_probability
         
@@ -379,7 +365,6 @@ class LM(object):
         of the language model over the corpus.
         
         DON'T TOUCH THIS FUNCTION!!!
-        """
         
         probs = []
         total = len(test_corpus.sentences[:1000])
@@ -406,6 +391,25 @@ class LM(object):
         avg_entropy = -1 * (sum(entropy) / len(entropy))
         
         return pow(2.0, avg_entropy)
+        """
+        
+        probs = []
+        for sentence in test_corpus.sentences:
+            for idx in range(self.ngram_size-1, len(sentence)):
+                ngram = self.get_ngram(sentence, idx)
+                if self.ngram_size == 1:
+                    probs.append(self.get_unigram_probability(ngram))
+                else:
+                    probs.append(self.get_ngram_probability(ngram[0], ngram[1]))
+        
+        entropy = np.log2(probs)
+        # this assertion makes sure that you retrieved valid probabilities, whose log must be <= 0
+        assert all(entropy <= 0)
+        
+        avg_entropy = -1 * (sum(entropy) / len(entropy))
+        
+        return pow(2.0, avg_entropy)
+ 
 
 
 #------------------------------------------------------------------------------
